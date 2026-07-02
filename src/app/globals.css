@@ -76,6 +76,19 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* ============================================================
+     Browser-dependent scaling (CSS custom properties)
+     - Driven by JS in layout.tsx that sets data-font-scale and
+       data-viewport on <html>.
+     - clamp() ensures smooth scaling between breakpoints.
+     ============================================================ */
+  --hex-font-size: 12px;
+  --hex-row-height: 22px;
+  --hex-byte-width: 1.65em;
+  --toolbar-height: 44px;
+  --header-height: 48px;
+  --inspector-min-width: 320px;
 }
 
 .dark {
@@ -112,11 +125,123 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ============================================================
+   Font scale modes — driven by [data-font-scale] on <html>.
+   ============================================================ */
+html[data-font-scale="xs"] {
+  --hex-font-size: 10px;
+  --hex-row-height: 18px;
+  --toolbar-height: 36px;
+  --header-height: 40px;
+}
+html[data-font-scale="sm"] {
+  --hex-font-size: 11px;
+  --hex-row-height: 20px;
+  --toolbar-height: 40px;
+  --header-height: 44px;
+}
+html[data-font-scale="md"] {
+  --hex-font-size: 12px;
+  --hex-row-height: 22px;
+  --toolbar-height: 44px;
+  --header-height: 48px;
+}
+html[data-font-scale="lg"] {
+  --hex-font-size: 14px;
+  --hex-row-height: 26px;
+  --toolbar-height: 52px;
+  --header-height: 56px;
+}
+
+/* ============================================================
+   Viewport-aware scaling — small screens get slightly smaller
+   defaults to fit content, large screens get more breathing room.
+   ============================================================ */
+html[data-viewport="mobile"] {
+  --inspector-min-width: 100%;
+}
+html[data-viewport="tablet"] {
+  --inspector-min-width: 280px;
+}
+html[data-viewport="desktop"] {
+  --inspector-min-width: 360px;
+}
+
+/* ============================================================
+   Compact layout mode — denser spacing for power users.
+   ============================================================ */
+html[data-layout-mode="compact"] {
+  --hex-font-size: 10px;
+  --hex-row-height: 16px;
+  --toolbar-height: 36px;
+  --header-height: 40px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    /* Prevent overscroll/bounce on mobile when interacting with hex view */
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
   }
+  /* Prevent iOS double-tap zoom on toolbar buttons */
+  button {
+    touch-action: manipulation;
+  }
+}
+
+/* ============================================================
+   Custom scrollbar styling for the hex view and inspector lists
+   ============================================================ */
+.hex-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.hex-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hex-scroll::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 5px;
+  opacity: 0.4;
+}
+.hex-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+  opacity: 0.7;
+}
+.hex-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+/* Hide scrollbar on the tab strip for cleaner look on mobile */
+.tab-strip {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area for mobile (iPhone notch, etc.) */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Prevent text selection while dragging in hex view (improves UX) */
+.no-select-drag {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Long-press prevention on mobile hex cells */
+.hex-cell {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }

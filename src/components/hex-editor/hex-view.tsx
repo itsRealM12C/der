@@ -16,7 +16,6 @@ interface HexViewProps {
   fieldHighlights?: { offset: number; size: number; color: string; name: string }[];
 }
 
-const ROW_HEIGHT = 22;
 const VIRTUAL_OVERSCAN = 8;
 
 export default function HexView({ onSelectionChange, fieldHighlights }: HexViewProps) {
@@ -40,26 +39,77 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [rowHeight, setRowHeight] = useState(22); // dynamic, read from CSS var
   const [editingOffset, setEditingOffset] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(800);
 
-  // Auto-resize observer
+  // Read the current row-height from the CSS variable (set by font-scale / layout mode).
+  // Also re-read on viewport changes (font scale toggles update the CSS var).
+  const readRowHeight = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue("--hex-row-height")
+      .trim();
+    const n = parseInt(v, 10);
+    if (!isNaN(n) && n > 0) setRowHeight(n);
+  }, []);
+
+  useEffect(() => {
+    // Schedule initial read in a rAF so we don't cascade-render synchronously
+    let raf = 0;
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(readRowHeight);
+    };
+    schedule();
+    // Re-read periodically (font scale change updates CSS var)
+    const id = window.setInterval(schedule, 500);
+    return () => {
+      window.clearInterval(id);
+      cancelAnimationFrame(raf);
+    };
+  }, [readRowHeight]);
+
+  // Auto-resize observer — track both height and width
   useEffect(() => {
     if (!containerRef.current) return;
+    const el = containerRef.current;
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
         setViewportHeight(e.contentRect.height);
+        setContainerWidth(e.contentRect.width);
       }
+      readRowHeight();
     });
-    ro.observe(containerRef.current);
+    ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [readRowHeight]);
+
+  // Scroll cursor into view when it changes due to jump/search/structure click
+  useEffect(() => {
+    if (!bytes || !containerRef.current) return;
+    const targetRow = Math.floor(cursor / bytesPerRow);
+    const rowTop = targetRow * rowHeight;
+    const rowBottom = rowTop + rowHeight;
+    const el = containerRef.current;
+    const viewTop = el.scrollTop;
+    const viewBottom = el.scrollTop + el.clientHeight;
+    if (rowTop < viewTop) {
+      el.scrollTo({ top: Math.max(0, rowTop - rowHeight * 2), behavior: "smooth" });
+    } else if (rowBottom > viewBottom) {
+      el.scrollTo({
+        top: Math.max(0, rowBottom - el.clientHeight + rowHeight * 2),
+        behavior: "smooth",
+      });
+    }
+  }, [cursor, bytes, bytesPerRow, rowHeight]);
 
   const totalRows = bytes ? Math.ceil(bytes.length / bytesPerRow) : 0;
-  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VIRTUAL_OVERSCAN);
-  const visibleRowCount = Math.ceil(viewportHeight / ROW_HEIGHT) + VIRTUAL_OVERSCAN * 2;
+  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowHeight) - VIRTUAL_OVERSCAN);
+  const visibleRowCount = Math.ceil(viewportHeight / rowHeight) + VIRTUAL_OVERSCAN * 2;
   const lastVisibleRow = Math.min(totalRows, firstVisibleRow + visibleRowCount);
 
   // Build a quick lookup of which byte is highlighted by which color (from fields).
@@ -141,7 +191,11 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
 
   useEffect(() => {
     window.addEventListener("mouseup", handleMouseUp);
-    return () => window.removeEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchend", handleMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchend", handleMouseUp);
+    };
   }, [handleMouseUp]);
 
   // Handle edit input
@@ -179,7 +233,44 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
     }
   };
 
-  // Render rows (React Compiler auto-memoizes)
+  // Touch support: long-press to start drag selection on mobile.
+  // The browser's touchstart -> mousedown translation usually works,
+  // but we add explicit handlers to make drag selection smoother.
+  const lastTouchByteRef = useRef<number | null>(null);
+
+  const handleByteTouchStart = (i: number) => (e: React.TouchEvent) => {
+    lastTouchByteRef.current = i;
+    if (readOnly) {
+      setDragStart(i);
+      setIsDragging(true);
+      setCursor(i);
+      setSelection(i, i + 1);
+      onSelectionChange?.(i, i + 1);
+    }
+    // Prevent the synthetic mouse event from also firing (avoid double-trigger)
+    if (e.cancelable) e.preventDefault();
+  };
+
+  const handleByteTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || dragStart === null) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null;
+    const cell = el?.closest("[data-byte-idx]") as HTMLElement | null;
+    if (cell) {
+      const idx = parseInt(cell.dataset.byteIdx || "-1", 10);
+      if (idx >= 0 && idx !== lastTouchByteRef.current) {
+        lastTouchByteRef.current = idx;
+        const start = Math.min(dragStart, idx);
+        const end = Math.max(dragStart, idx) + 1;
+        setSelection(start, end);
+        onSelectionChange?.(start, end);
+      }
+    }
+    if (e.cancelable) e.preventDefault();
+  };
+
+  // Render rows
   const rows: React.ReactNode[] = (() => {
     if (!bytes) return [];
     const out: React.ReactNode[] = [];
@@ -216,9 +307,10 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
         hexCells.push(
           <span
             key={`h-${absIdx}`}
-            className="inline-flex items-center cursor-pointer select-none"
+            className="inline-flex items-center cursor-pointer select-none hex-cell"
+            data-byte-idx={absIdx}
             style={{
-              minWidth: "1.65em",
+              minWidth: "var(--hex-byte-width, 1.65em)",
               padding: "0 1px",
               backgroundColor: bg,
               borderRadius: "2px",
@@ -228,6 +320,8 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
             onMouseDown={() => inRange && handleByteMouseDown(absIdx)}
             onMouseEnter={() => inRange && handleByteMouseEnter(absIdx)}
             onClick={(e) => inRange && handleByteClick(absIdx, e.shiftKey)}
+            onTouchStart={inRange ? handleByteTouchStart(absIdx) : undefined}
+            onTouchMove={handleByteTouchMove}
             title={fieldInfo ? fieldInfo.name : undefined}
           >
             {hexContent}
@@ -249,7 +343,8 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
           asciiCells.push(
             <span
               key={`a-${absIdx}`}
-              className="inline-flex items-center cursor-pointer select-none"
+              className="inline-flex items-center cursor-pointer select-none hex-cell"
+              data-byte-idx={absIdx}
               style={{
                 padding: "0 0.5px",
                 backgroundColor: bg,
@@ -259,6 +354,8 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
               onMouseDown={() => handleByteMouseDown(absIdx)}
               onMouseEnter={() => handleByteMouseEnter(absIdx)}
               onClick={(e) => handleByteClick(absIdx, e.shiftKey)}
+              onTouchStart={handleByteTouchStart(absIdx)}
+              onTouchMove={handleByteTouchMove}
               title={fieldInfo ? fieldInfo.name : undefined}
             >
               {asciiChar}
@@ -282,19 +379,19 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
       out.push(
         <div
           key={`r-${r}`}
-          style={{ height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` }}
-          className="flex items-center font-mono text-xs"
+          style={{ height: rowHeight, lineHeight: `${rowHeight}px` }}
+          className="flex items-center font-mono"
         >
           {showOffset && (
             <span
-              className="text-muted-foreground pr-4 select-none"
-              style={{ minWidth: "10em" }}
+              className="text-muted-foreground pr-2 sm:pr-4 select-none shrink-0"
+              style={{ minWidth: "9em" }}
             >
               {formatOffset(rowStart)}
             </span>
           )}
           <div
-            className="flex-1 flex flex-wrap items-center"
+            className="flex-1 flex flex-nowrap items-center overflow-hidden"
             onKeyDown={handleEditKey}
             tabIndex={0}
           >
@@ -302,7 +399,7 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
           </div>
           {showAscii && (
             <div
-              className="ml-4 select-none"
+              className="ml-2 sm:ml-4 select-none shrink-0"
               style={{
                 minWidth: `${bytesPerRow + 2}ch`,
                 whiteSpace: "pre",
@@ -319,20 +416,28 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
 
   if (!bytes) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        No file loaded. Drag &amp; drop or use Open File in the toolbar.
+      <div className="flex items-center justify-center h-full text-muted-foreground p-4 text-center">
+        No file loaded. Drag &amp; drop, or use Open File in the toolbar.
       </div>
     );
   }
 
-  const totalHeight = totalRows * ROW_HEIGHT;
+  const totalHeight = totalRows * rowHeight;
+  const fontSize = "var(--hex-font-size, 12px)";
 
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-auto relative bg-background outline-none"
+      className="h-full overflow-auto relative bg-background hex-scroll no-select-drag"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-      style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+      onTouchMove={(e) => {
+        // Allow scrolling but let our drag selection handler also work
+        if (isDragging && e.cancelable) e.preventDefault();
+      }}
+      style={{
+        fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+        fontSize,
+      }}
       tabIndex={0}
       onKeyDown={(e) => {
         // If editing, route hex input to the editor
@@ -411,16 +516,45 @@ export default function HexView({ onSelectionChange, fieldHighlights }: HexViewP
         } else if (e.key === "Tab") {
           // ensure focus stays in container
           e.preventDefault();
+        } else if (
+          (e.key === "PageDown" || e.key === "PageUp") &&
+          containerRef.current
+        ) {
+          e.preventDefault();
+          const dir = e.key === "PageDown" ? 1 : -1;
+          const visibleRows = Math.floor(viewportHeight / rowHeight);
+          const nextRow = Math.max(
+            0,
+            Math.min(totalRows - 1, Math.floor(cursor / bytesPerRow) + dir * visibleRows)
+          );
+          const next = nextRow * bytesPerRow;
+          setCursor(next);
+          setSelection(next, next + 1);
+          onSelectionChange?.(next, next + 1);
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          const rowStart = Math.floor(cursor / bytesPerRow) * bytesPerRow;
+          setCursor(rowStart);
+          setSelection(rowStart, rowStart + 1);
+          onSelectionChange?.(rowStart, rowStart + 1);
+        } else if (e.key === "End") {
+          e.preventDefault();
+          const rowStart = Math.floor(cursor / bytesPerRow) * bytesPerRow;
+          const next = Math.min(bytes.length - 1, rowStart + bytesPerRow - 1);
+          setCursor(next);
+          setSelection(next, next + 1);
+          onSelectionChange?.(next, next + 1);
         }
       }}
     >
-      <div style={{ height: totalHeight, position: "relative" }}>
+      <div style={{ height: totalHeight, position: "relative", minWidth: "min-content" }}>
         <div
           style={{
             position: "absolute",
-            top: firstVisibleRow * ROW_HEIGHT,
+            top: firstVisibleRow * rowHeight,
             left: 0,
             right: 0,
+            minWidth: "min-content",
           }}
         >
           {rows}

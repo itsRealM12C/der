@@ -2,6 +2,15 @@
 
 import { create } from "zustand";
 
+export type LayoutMode =
+  | "split-h" // hex left, inspector right (classic desktop)
+  | "split-v" // hex top, inspector bottom (good for narrow screens)
+  | "stacked" // hex above, inspector below in scroll (good for vertical reading)
+  | "focus"   // hex only, inspector hidden
+  | "compact"; // smaller fonts, denser layout
+
+export type FontScale = "xs" | "sm" | "md" | "lg";
+
 export interface HexState {
   /** Raw bytes of the loaded file. */
   bytes: Uint8Array | null;
@@ -30,6 +39,16 @@ export interface HexState {
   /** Overwrite vs insert mode for editing (we only support overwrite here). */
   highlightRange: { start: number; end: number; color: string } | null;
 
+  // New layout/UI state
+  layoutMode: LayoutMode;
+  fontScale: FontScale;
+  /** Inspector panel open on mobile (drawer/sheet). */
+  mobileInspectorOpen: boolean;
+  /** Active inspector tab on mobile. */
+  mobileTab: string;
+  /** Whether the responsive auto-layout kicked in (based on viewport). */
+  autoLayout: boolean;
+
   setBytes: (bytes: Uint8Array, name: string, type: string) => void;
   setSelection: (start: number, end: number) => void;
   setCursor: (pos: number) => void;
@@ -43,6 +62,11 @@ export interface HexState {
   setHighlightRange: (r: { start: number; end: number; color: string } | null) => void;
   /** Overwrite a single byte at offset. */
   writeByte: (offset: number, value: number) => void;
+  setLayoutMode: (m: LayoutMode) => void;
+  setFontScale: (s: FontScale) => void;
+  setMobileInspectorOpen: (v: boolean) => void;
+  setMobileTab: (t: string) => void;
+  setAutoLayout: (v: boolean) => void;
 }
 
 export const useHexStore = create<HexState>((set) => ({
@@ -61,6 +85,13 @@ export const useHexStore = create<HexState>((set) => ({
   showOffset: true,
   readOnly: true,
   highlightRange: null,
+
+  // New layout/UI state
+  layoutMode: "split-h",
+  fontScale: "md",
+  mobileInspectorOpen: false,
+  mobileTab: "inspector",
+  autoLayout: false,
 
   setBytes: (bytes, name, type) =>
     set({
@@ -91,4 +122,9 @@ export const useHexStore = create<HexState>((set) => ({
       next[offset] = value & 0xff;
       return { bytes: next };
     }),
+  setLayoutMode: (m) => set({ layoutMode: m }),
+  setFontScale: (s) => set({ fontScale: s }),
+  setMobileInspectorOpen: (v) => set({ mobileInspectorOpen: v }),
+  setMobileTab: (t) => set({ mobileTab: t }),
+  setAutoLayout: (v) => set({ autoLayout: v }),
 }));
