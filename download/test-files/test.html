@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A test HTML file for HexForge reverse engineering">
+  <meta name="author" content="HexForge">
+  <meta property="og:title" content="HexForge Test Page">
+  <meta property="og:type" content="website">
+  <title>HexForge Test · HTML Reverse Engineering</title>
+  <link rel="stylesheet" href="https://cdn.example.com/styles/main.css">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="canonical" href="https://example.com/page">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+    .header { border-bottom: 1px solid #ddd; padding-bottom: 1rem; }
+    .code-block { background: #f5f5f5; padding: 1rem; border-radius: 4px; }
+    @media (max-width: 600px) { body { margin: 1rem; } }
+  </style>
+  <script src="https://cdn.example.com/jquery.min.js" defer></script>
+  <script>
+    // Inline analytics script
+    console.log("page loaded");
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'UA-XXXXX-Y');
+  </script>
+</head>
+<body>
+  <!-- Header section -->
+  <div class="header">
+    <h1>HexForge HTML Test</h1>
+    <p>This file tests the HTML parser with scripts, styles, images, and links.</p>
+  </div>
+
+  <!-- Main content -->
+  <main>
+    <section id="content">
+      <h2>Features</h2>
+      <ul>
+        <li>Tag-by-tag byte offsets</li>
+        <li>Inline script extraction</li>
+        <li>External resource URLs</li>
+        <li>Comment collection</li>
+      </ul>
+      <img src="/images/screenshot.png" alt="Screenshot" width="800" height="600">
+      <img src="data:image/svg+xml;base64,PHN2Zz4=" alt="Inline SVG" width="16" height="16">
+      <a href="https://github.com/example/repo">View on GitHub</a>
+      <a href="#content">Jump to content</a>
+      <a href="mailto:hello@example.com">Email us</a>
+    </section>
+    <section id="code">
+      <pre class="code-block"><code>const x = 42;</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 HexForge. <a href="/about">About</a> · <a href="/privacy">Privacy</a></p>
+  </footer>
+
+  <script type="module">
+    // Module-scoped inline script
+    import { init } from './app.js';
+    init();
+  </script>
+
+  <script async src="https://www.google-analytics.com/analytics.js"></script>
+</body>
+</html>

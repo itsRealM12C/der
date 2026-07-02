@@ -1108,6 +1108,30 @@ export const FILE_TEMPLATES: FileTemplate[] = [
       },
     ],
   },
+  {
+    id: "html",
+    name: "HTML Document",
+    mime: ["text/html", "application/xhtml+xml"],
+    // No fixed magic bytes — detection is handled in detectTemplate() via isHtml().
+    // We keep an empty magic array so the magic-byte loop skips this template.
+    magic: [],
+    parse: (b) => {
+      // Show the first 256 bytes as a preview; the full HTML structure
+      // is rendered in the dedicated HTML inspector tab.
+      const previewLen = Math.min(256, b.length);
+      const previewText = ascii(b, 0, previewLen);
+      return [
+        {
+          offset: 0,
+          size: previewLen,
+          name: "HTML Preview (first 256B)",
+          value: { kind: "ascii", value: previewText },
+          description: "Full structure parsed in the HTML inspector tab",
+          color: "#7c3aed",
+        },
+      ];
+    },
+  },
 ];
 
 const JPEG_MARKERS: Record<number, string> = {
@@ -1132,6 +1156,7 @@ const JPEG_MARKERS: Record<number, string> = {
 /** Detect file template by magic bytes. Returns the first matching template. */
 export function detectTemplate(bytes: Uint8Array): FileTemplate | null {
   for (const tpl of FILE_TEMPLATES) {
+    if (tpl.magic.length === 0) continue; // skip templates without magic (e.g. HTML)
     for (const m of tpl.magic) {
       if (m.offset + m.bytes.length > bytes.length) continue;
       let match = true;
@@ -1156,7 +1181,26 @@ export function detectTemplate(bytes: Uint8Array): FileTemplate | null {
       }
     }
   }
+  // Fallback: HTML content-based detection (no fixed magic bytes)
+  const htmlTpl = FILE_TEMPLATES.find((t) => t.id === "html");
+  if (htmlTpl && isHtmlBytes(bytes)) {
+    return htmlTpl;
+  }
   return null;
+}
+
+/** Quick HTML signature check — used by detectTemplate as a fallback. */
+function isHtmlBytes(bytes: Uint8Array): boolean {
+  const head = bytes.subarray(0, Math.min(1024, bytes.length));
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(head).toLowerCase();
+  const trimmed = text.replace(/^[\ufeff\s]*/, "");
+  if (trimmed.startsWith("<!doctype html")) return true;
+  if (trimmed.startsWith("<html")) return true;
+  if (trimmed.startsWith("<head")) return true;
+  if (/^<[a-z][a-z0-9-]*[\s/>]/.test(trimmed)) {
+    if (!trimmed.startsWith("<?xml") && !trimmed.startsWith("<svg")) return true;
+  }
+  return false;
 }
 
 /** Guess a mime type from a File's name + type. */
@@ -1188,6 +1232,22 @@ export function guessMime(file: File): string {
     gz: "application/gzip",
     elf: "application/x-elf",
     class: "application/x-java-applet",
+    html: "text/html",
+    htm: "text/html",
+    xhtml: "application/xhtml+xml",
+    xht: "application/xhtml+xml",
+    js: "application/javascript",
+    mjs: "application/javascript",
+    css: "text/css",
+    json: "application/json",
+    xml: "application/xml",
+    svg: "image/svg+xml",
+    txt: "text/plain",
+    md: "text/markdown",
+    csv: "text/csv",
+    ts: "application/typescript",
+    tsx: "application/typescript",
+    jsx: "application/javascript",
   };
   return map[ext] || "application/octet-stream";
 }

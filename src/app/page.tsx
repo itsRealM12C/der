@@ -197,6 +197,9 @@ export default function Home() {
               <div className="rounded border p-2">File structure<br/>templates</div>
               <div className="rounded border p-2">CRC/MD5/SHA<br/>checksums</div>
               <div className="rounded border p-2">String extraction<br/>& search</div>
+              <div className="rounded border p-2 col-span-2 sm:col-span-3 text-emerald-600 dark:text-emerald-400">
+                <strong>NEW</strong> · HTML document parsing — load any .html file (incl. GitHub Pages sites) to inspect tags, scripts, styles, links, and inline JS/CSS with byte-accurate offsets
+              </div>
             </div>
           </div>
         </div>

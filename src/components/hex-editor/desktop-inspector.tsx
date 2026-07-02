@@ -9,6 +9,7 @@ import {
   Music,
   Boxes,
   Film,
+  Code2,
 } from "lucide-react";
 import { useHexStore } from "@/lib/hex-store";
 import dynamic from "next/dynamic";
@@ -41,6 +42,10 @@ const FileInfoPanel = dynamic(
   () => import("@/components/hex-editor/file-info-panel").then((m) => m.default),
   { ssr: false }
 );
+const HtmlPanel = dynamic(
+  () => import("@/components/hex-editor/html-panel").then((m) => m.default),
+  { ssr: false }
+);
 
 interface DesktopInspectorProps {
   fieldHighlights?: { offset: number; size: number; color: string; name: string }[];
@@ -50,7 +55,7 @@ interface DesktopInspectorProps {
 }
 
 /**
- * Desktop inspector — 7 tabs in a grid, fills the right panel.
+ * Desktop inspector — 8 tabs in a grid, fills the right panel.
  */
 export function DesktopInspector({ fieldHighlights, tab, onTabChange }: DesktopInspectorProps) {
   const { bytes, fileName, fileType } = useHexStore();
@@ -59,11 +64,15 @@ export function DesktopInspector({ fieldHighlights, tab, onTabChange }: DesktopI
     fileType.startsWith("audio/") || /\.(wav|mp3|flac|ogg|oga|m4a|aac|opus)$/i.test(fileName);
   const isVideo =
     fileType.startsWith("video/") || /\.(mp4|m4v|webm|mov|avi|mkv|ogv)$/i.test(fileName);
+  const isHtml =
+    fileType.startsWith("text/html") ||
+    fileType.startsWith("application/xhtml") ||
+    /\.(html?|xhtml|xht)$/i.test(fileName);
 
   return (
     <Tabs value={tab} onValueChange={onTabChange} className="h-full flex flex-col">
       <div className="border-b px-2 pt-2 shrink-0">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 h-auto">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 h-auto">
           <TabsTrigger value="inspector" className="text-xs py-1.5">
             <Binary className="h-3 w-3 mr-1" />
             <span className="hidden sm:inline">Inspect</span>
@@ -83,6 +92,10 @@ export function DesktopInspector({ fieldHighlights, tab, onTabChange }: DesktopI
           <TabsTrigger value="structure" className="text-xs py-1.5">
             <Boxes className="h-3 w-3 mr-1" />
             <span className="hidden sm:inline">Structure</span>
+          </TabsTrigger>
+          <TabsTrigger value="html" className="text-xs py-1.5" disabled={!bytes || !isHtml}>
+            <Code2 className="h-3 w-3 mr-1" />
+            <span className="hidden sm:inline">HTML</span>
           </TabsTrigger>
           <TabsTrigger value="audio" className="text-xs py-1.5" disabled={!bytes}>
             <Music className="h-3 w-3 mr-1" />
@@ -109,6 +122,9 @@ export function DesktopInspector({ fieldHighlights, tab, onTabChange }: DesktopI
         </TabsContent>
         <TabsContent value="structure" className="mt-0 h-full">
           <StructurePanel />
+        </TabsContent>
+        <TabsContent value="html" className="mt-0 h-full" forceMount={isHtml}>
+          <HtmlPanel />
         </TabsContent>
         <TabsContent value="audio" className="mt-0 h-full overflow-y-auto" forceMount={isAudio}>
           <AudioPanel />

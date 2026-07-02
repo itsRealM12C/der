@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Binary,
   FileSearch,
@@ -12,6 +11,7 @@ import {
   Music,
   Boxes,
   Film,
+  Code2,
 } from "lucide-react";
 import { useHexStore } from "@/lib/hex-store";
 import dynamic from "next/dynamic";
@@ -44,6 +44,10 @@ const FileInfoPanel = dynamic(
   () => import("@/components/hex-editor/file-info-panel").then((m) => m.default),
   { ssr: false }
 );
+const HtmlPanel = dynamic(
+  () => import("@/components/hex-editor/html-panel").then((m) => m.default),
+  { ssr: false }
+);
 
 interface MobileInspectorProps {
   open: boolean;
@@ -62,13 +66,18 @@ export function MobileInspector({ open, onOpenChange, fieldHighlights }: MobileI
     fileType.startsWith("audio/") || /\.(wav|mp3|flac|ogg|oga|m4a|aac|opus)$/i.test(fileName);
   const isVideo =
     fileType.startsWith("video/") || /\.(mp4|m4v|webm|mov|avi|mkv|ogv)$/i.test(fileName);
+  const isHtml =
+    fileType.startsWith("text/html") ||
+    fileType.startsWith("application/xhtml") ||
+    /\.(html?|xhtml|xht)$/i.test(fileName);
 
   // Ensure a valid tab is selected when file changes
   useEffect(() => {
     if (!bytes) return;
     if (mobileTab === "audio" && !isAudio) setMobileTab("inspector");
     if (mobileTab === "video" && !isVideo) setMobileTab("inspector");
-  }, [bytes, isAudio, isVideo, mobileTab, setMobileTab]);
+    if (mobileTab === "html" && !isHtml) setMobileTab("inspector");
+  }, [bytes, isAudio, isVideo, isHtml, mobileTab, setMobileTab]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -89,7 +98,7 @@ export function MobileInspector({ open, onOpenChange, fieldHighlights }: MobileI
           className="flex-1 flex flex-col min-h-0"
         >
           <div className="border-b px-2 pt-2 shrink-0">
-            <TabsList className="grid h-auto grid-cols-7 tab-strip overflow-x-auto">
+            <TabsList className="grid h-auto grid-cols-8 tab-strip overflow-x-auto">
               <TabsTrigger value="inspector" className="text-xs py-1.5 px-1">
                 <Binary className="h-3 w-3" />
               </TabsTrigger>
@@ -104,6 +113,9 @@ export function MobileInspector({ open, onOpenChange, fieldHighlights }: MobileI
               </TabsTrigger>
               <TabsTrigger value="structure" className="text-xs py-1.5 px-1">
                 <Boxes className="h-3 w-3" />
+              </TabsTrigger>
+              <TabsTrigger value="html" className="text-xs py-1.5 px-1" disabled={!bytes || !isHtml}>
+                <Code2 className="h-3 w-3" />
               </TabsTrigger>
               <TabsTrigger value="audio" className="text-xs py-1.5 px-1" disabled={!bytes}>
                 <Music className="h-3 w-3" />
@@ -128,6 +140,9 @@ export function MobileInspector({ open, onOpenChange, fieldHighlights }: MobileI
             </TabsContent>
             <TabsContent value="structure" className="mt-0 h-full">
               <StructurePanel />
+            </TabsContent>
+            <TabsContent value="html" className="mt-0 h-full" forceMount={isHtml}>
+              <HtmlPanel />
             </TabsContent>
             <TabsContent value="audio" className="mt-0 h-full overflow-y-auto" forceMount={isAudio}>
               <AudioPanel />
